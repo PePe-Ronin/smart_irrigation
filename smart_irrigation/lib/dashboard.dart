@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class IrrigationDashboard extends StatelessWidget {
   const IrrigationDashboard({super.key});
@@ -75,10 +76,141 @@ class IrrigationDashboard extends StatelessWidget {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.green, // Green background
                     ),
-                    onPressed: () {},
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) {
+                          // TextEditingControllers for the form fields
+                          TextEditingController titleController =
+                              TextEditingController();
+                          TextEditingController sizeController =
+                              TextEditingController();
+                          TextEditingController soilController =
+                              TextEditingController();
+                          TextEditingController statusController =
+                              TextEditingController();
+
+                          return AlertDialog(
+                            title: const Text(
+                              'Add New Zone',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            content: SingleChildScrollView(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  TextField(
+                                    controller: titleController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Title',
+                                    ),
+                                  ),
+                                  TextField(
+                                    controller: sizeController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Size',
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                  TextField(
+                                    controller: soilController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Soil Moisture',
+                                    ),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                  TextField(
+                                    controller: statusController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Status',
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () {
+                                  Navigator.of(context).pop(); // Close dialog
+                                },
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(color: Colors.black),
+                                ),
+                              ),
+                              ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.green,
+                                ),
+                                onPressed: () async {
+                                  String title = titleController.text;
+                                  String size = sizeController.text;
+                                  String soil = soilController.text;
+                                  String status = statusController.text;
+
+                                  if (title.isEmpty ||
+                                      size.isEmpty ||
+                                      soil.isEmpty ||
+                                      status.isEmpty) {
+                                    // Optional: show error if fields are empty
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text("Please fill all fields"),
+                                      ),
+                                    );
+                                    return;
+                                  }
+
+                                  try {
+                                    // Save to Firestore
+                                    await FirebaseFirestore.instance
+                                        .collection("zones")
+                                        .add({
+                                          "title": title,
+                                          "size": size,
+                                          "moisture":
+                                              double.tryParse(soil) ??
+                                              0, // convert soil to double
+                                          "status": status,
+                                          "created_at":
+                                              FieldValue.serverTimestamp(), // optional timestamp
+                                        });
+
+                                    Navigator.of(
+                                      context,
+                                    ).pop(); // Close the dialog
+
+                                    // Optional: show confirmation
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          "Zone added successfully",
+                                        ),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    // Handle error
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text("Error saving zone: $e"),
+                                      ),
+                                    );
+                                  }
+                                },
+                                child: const Text(
+                                  'Save',
+                                  style: TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      );
+                    },
                     child: const Row(
                       children: [
                         Icon(Icons.add, color: Colors.white, size: 30),
+                        SizedBox(width: 5),
                         Text(
                           'Add new zone',
                           style: TextStyle(color: Colors.white),
@@ -92,11 +224,33 @@ class IrrigationDashboard extends StatelessWidget {
 
             const SizedBox(height: 10),
 
-            const ZoneCard(
-              title: "Front Lawn",
-              size: "120 m²",
-              moisture: 0.53,
-              status: "Active",
+            /// FIREBASE DATA
+            StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection("zones")
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Text("No zones available");
+                }
+
+                var zones = snapshot.data!.docs;
+
+                return Column(
+                  children: zones.map((zone) {
+                    return ZoneCard(
+                      title: zone["title"],
+                      size: zone["size"],
+                      moisture: (zone["moisture"] as num)
+                          .toDouble(), // cast to double
+                      status: zone["status"],
+                    );
+                  }).toList(),
+                );
+              },
             ),
           ],
         ),
@@ -125,12 +279,12 @@ class StatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.green, size: 60),
+          Icon(icon, color: Colors.green, size: 30),
           const Spacer(),
           Text(title, style: const TextStyle(color: Colors.grey)),
           Text(
             value,
-            style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
         ],
       ),
